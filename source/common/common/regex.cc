@@ -138,6 +138,7 @@ std::string LazyGoogleReMatcher::replaceAll(absl::string_view value, absl::strin
   auto regex_or_status = regex_.get();
   if (!regex_or_status.ok()) {
     ENVOY_LOG_MISC(error, "Invalid regex: {}", regex_or_status.status().message());
+    return result;
   }
   re2::RE2::GlobalReplace(&result, *regex_or_status.value(), substitution);
   return result;
@@ -147,6 +148,7 @@ const std::string& LazyGoogleReMatcher::pattern() const {
   auto regex_or_status = regex_.get();
   if (!regex_or_status.ok()) {
     ENVOY_LOG_MISC(error, "Invalid regex: {}", regex_or_status.status().message());
+    return pattern_;
   }
   return regex_or_status.value()->pattern();
 }

@@ -115,10 +115,10 @@ protected:
   explicit LazyGoogleReMatcher(const std::string& regex) : regex_(regex, re2::RE2::Quiet, true) {};
 
   LazyGoogleReMatcher(const std::string& regex, bool do_program_size_check)
-    : regex_(regex, re2::RE2::Quiet, do_program_size_check) {}
+    : regex_(regex, re2::RE2::Quiet, do_program_size_check), pattern_(regex) {}
 
   LazyGoogleReMatcher(const std::string& regex, bool do_program_size_check, std::optional<uint32_t> deprecated_max_program_size)
-    : regex_(regex, re2::RE2::Quiet, do_program_size_check, deprecated_max_program_size) {}
+    : regex_(regex, re2::RE2::Quiet, do_program_size_check, deprecated_max_program_size), pattern_(regex) {}
   
   explicit LazyGoogleReMatcher(const envoy::type::matcher::v3::RegexMatcher& config, std::optional<uint32_t> deprecated_max_program_size)
       : LazyGoogleReMatcher(config.regex(),
@@ -132,6 +132,7 @@ protected:
       : LazyGoogleReMatcher(config.regex(), false) {}
   
   const SafeLazyRE2 regex_;
+  std::string pattern_;
 };
 
 // Allow creating CompiledGoogleReMatcher without checking for status failures
