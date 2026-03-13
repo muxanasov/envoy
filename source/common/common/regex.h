@@ -62,12 +62,8 @@ protected:
 };
 
 class SafeLazyRE2 {
- //
- // private:
- // struct NoArg {};
 
  public:
-  //typedef re2::RE2 element_type;  // support std::pointer_traits
 
     SafeLazyRE2(const std::string& pattern, re2::RE2::CannedOptions options, bool do_program_size_check)
       : pattern_(pattern), options_(options), do_program_size_check_(do_program_size_check), deprecated_max_program_size_(std::nullopt) {}
@@ -75,11 +71,7 @@ class SafeLazyRE2 {
           SafeLazyRE2(const std::string& pattern, re2::RE2::CannedOptions options, bool do_program_size_check, std::optional<uint32_t> deprecated_max_program_size)
       : pattern_(pattern), options_(options), do_program_size_check_(do_program_size_check), deprecated_max_program_size_(deprecated_max_program_size) {}
 
-  // Pretend to be a pointer to Type (never NULL due to on-demand creation):
-  //re2::RE2& operator*() const { return *get(); }
-  //re2::RE2* operator->() const { return get(); }
-
-  // Named accessor/initializer:
+  // initializer:
   absl::StatusOr<re2::RE2*> get() const;
 
  private:
@@ -127,9 +119,6 @@ protected:
 
   LazyGoogleReMatcher(const std::string& regex, bool do_program_size_check, std::optional<uint32_t> deprecated_max_program_size)
     : regex_(regex, re2::RE2::Quiet, do_program_size_check, deprecated_max_program_size) {}
-
-  //LazyGoogleReMatcher(const envoy::type::matcher::v3::RegexMatcher& config,
-  //                   const std::string& regex, bool do_program_size_check);
   
   explicit LazyGoogleReMatcher(const envoy::type::matcher::v3::RegexMatcher& config, std::optional<uint32_t> deprecated_max_program_size)
       : LazyGoogleReMatcher(config.regex(),
