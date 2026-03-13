@@ -159,6 +159,8 @@ TEST(GoogleReEngineTest, Matcher) {
     EXPECT_FALSE(compiled_matcher->match("test"));
     // the error is stored in logs.
     EXPECT_LOG_CONTAINS("error", "Invalid regex: no argument for repetition operator: +", compiled_matcher->match("test"));
+    // expect still to return pattern after failure
+    EXPECT_EQ(compiled_matcher->pattern(), "(+invalid)");
   }
 
   // Regression test for https://github.com/envoyproxy/envoy/issues/7728
