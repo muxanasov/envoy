@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include <optional>
 #include <regex>
 
 #include "envoy/common/regex.h"
@@ -14,6 +15,7 @@
 
 #include "re2/re2.h"
 #include "xds/type/matcher/v3/regex.pb.h"
+#include "source/common/runtime/runtime_features.h"
 
 namespace Envoy {
 namespace Regex {
@@ -59,6 +61,90 @@ protected:
   const re2::RE2 regex_;
 };
 
+class SafeLazyRE2 {
+ //
+ // private:
+ // struct NoArg {};
+
+ public:
+  //typedef re2::RE2 element_type;  // support std::pointer_traits
+
+    SafeLazyRE2(const std::string& pattern, re2::RE2::CannedOptions options, bool do_program_size_check)
+      : pattern_(pattern), options_(options), do_program_size_check_(do_program_size_check), deprecated_max_program_size_(std::nullopt) {}
+
+          SafeLazyRE2(const std::string& pattern, re2::RE2::CannedOptions options, bool do_program_size_check, std::optional<uint32_t> deprecated_max_program_size)
+      : pattern_(pattern), options_(options), do_program_size_check_(do_program_size_check), deprecated_max_program_size_(deprecated_max_program_size) {}
+
+  // Pretend to be a pointer to Type (never NULL due to on-demand creation):
+  //re2::RE2& operator*() const { return *get(); }
+  //re2::RE2* operator->() const { return get(); }
+
+  // Named accessor/initializer:
+  absl::StatusOr<re2::RE2*> get() const;
+
+ private:
+  static void Init(const SafeLazyRE2* safe_lazy_re2);
+
+  const std::string pattern_;
+  re2::RE2::CannedOptions options_;
+
+  mutable std::unique_ptr<re2::RE2> regex_;
+  mutable absl::Status creation_status_;
+  mutable absl::once_flag once_;
+  bool do_program_size_check_;
+  std::optional<int32_t> deprecated_max_program_size_;
+
+  void operator=(const SafeLazyRE2&);  // disallowed
+};
+
+class LazyGoogleReMatcher : public CompiledMatcher {
+public:
+  // Create, applying re2.max_program_size.error_level and re2.max_program_size.warn_level.
+  static absl::StatusOr<std::unique_ptr<LazyGoogleReMatcher>>
+  createAndSizeCheck(const std::string& regex);
+  static absl::StatusOr<std::unique_ptr<LazyGoogleReMatcher>>
+  create(const envoy::type::matcher::v3::RegexMatcher& config);
+  static absl::StatusOr<std::unique_ptr<LazyGoogleReMatcher>>
+  create(const xds::type::matcher::v3::RegexMatcher& config);
+
+  // To avoid hiding other implementations of match.
+  using CompiledMatcher::match;
+
+  // CompiledMatcher
+  bool match(absl::string_view value) const override;
+
+  // CompiledMatcher
+  std::string replaceAll(absl::string_view value, absl::string_view substitution) const override;
+
+  // CompiledMatcher
+  const std::string& pattern() const override;
+
+protected:
+  explicit LazyGoogleReMatcher(const std::string& regex) : regex_(regex, re2::RE2::Quiet, true) {};
+
+  LazyGoogleReMatcher(const std::string& regex, bool do_program_size_check)
+    : regex_(regex, re2::RE2::Quiet, do_program_size_check) {}
+
+  LazyGoogleReMatcher(const std::string& regex, bool do_program_size_check, std::optional<uint32_t> deprecated_max_program_size)
+    : regex_(regex, re2::RE2::Quiet, do_program_size_check, deprecated_max_program_size) {}
+
+  //LazyGoogleReMatcher(const envoy::type::matcher::v3::RegexMatcher& config,
+  //                   const std::string& regex, bool do_program_size_check);
+  
+  explicit LazyGoogleReMatcher(const envoy::type::matcher::v3::RegexMatcher& config, std::optional<uint32_t> deprecated_max_program_size)
+      : LazyGoogleReMatcher(config.regex(),
+                          !config.google_re2().has_max_program_size(), deprecated_max_program_size) {}
+
+  explicit LazyGoogleReMatcher(const envoy::type::matcher::v3::RegexMatcher& config)
+      : LazyGoogleReMatcher(config.regex(),
+                          !config.google_re2().has_max_program_size()) {}
+  
+  explicit LazyGoogleReMatcher(const xds::type::matcher::v3::RegexMatcher& config)
+      : LazyGoogleReMatcher(config.regex(), false) {}
+  
+  const SafeLazyRE2 regex_;
+};
+
 // Allow creating CompiledGoogleReMatcher without checking for status failures
 // for call sites which really really want to.
 class CompiledGoogleReMatcherNoSafetyChecks : public CompiledGoogleReMatcher {
@@ -96,6 +182,9 @@ public:
                                                        Engine& engine) {
     // Fallback deprecated engine type in regex matcher.
     if (matcher.has_google_re2()) {
+      if (Runtime::runtimeFeatureEnabled("envoy.reloadable_features.re2_lazy_loading")) {
+        return LazyGoogleReMatcher::create(matcher);
+      }
       return CompiledGoogleReMatcher::create(matcher);
     }
 
